@@ -615,29 +615,29 @@ int kill_system(){
 }
 
 int pause_system(int seconds){
-  struct proc *p;
-  int chan = 8;
-  int shellId = 2;
-  int initId = 1 ;
-  clock_t begin;
-  double time_spent = 0;
-
-  for(p = proc; p < &proc[NPROC]; p++){
-    if((p->pid != shellId) && (p->pid != initId)){
-      sleep(&chan,&p->lock);
-      if(p->state != SLEEPING){
-        return -1;
-      }
-
-    }
-  }
-  begin = clock();
-    while (time_spent<seconds)
-        {
-        //printf("hello\n");
-        /* Get CPU time since loop started */
-        time_spent = (double)(clock() - begin) / CLOCKS_PER_SEC;}
-   wakeup(&chan);
+  // struct proc *p;
+  // int chan = 8;
+  // int shellId = 2;
+  // int initId = 1 ;
+  // clock_t begin;
+  // double time_spent = 0;
+  //
+  // for(p = proc; p < &proc[NPROC]; p++){
+  //   if((p->pid != shellId) && (p->pid != initId)){
+  //     sleep(&chan,&p->lock);
+  //     if(p->state != SLEEPING){
+  //       return -1;
+  //     }
+  //
+  //   }
+  // }
+  // begin = clock();
+  //   while (time_spent<seconds)
+  //       {
+  //       //printf("hello\n");
+  //       /* Get CPU time since loop started */
+  //       time_spent = (double)(clock() - begin) / CLOCKS_PER_SEC;}
+  //  wakeup(&chan);
   return 0;
 
 
