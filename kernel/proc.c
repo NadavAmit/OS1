@@ -21,11 +21,17 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+//PauseSystem integers
 int pauseSystemTicksStartTime = 0;
 int pauseSystemSleepSecondsInput = 0;
 
+//MCMF Policy
 #define MAX_INT 2147483647;
 
+//Approximate Policy
+int rate = 5;
+
+//Policy identifier
 #ifdef SJF
 int policy = 1;
 #endif
@@ -457,6 +463,8 @@ scheduler(void)
   case 0:
     roundRobin();
     break;
+  case 1:
+    ApproximateSJF();
   case 2:
     firstComeFirstServed();
     break;
@@ -520,7 +528,7 @@ firstComeFirstServed(void){
         }
         release(&p->lock);
       } 
-    //run minimal procces
+        //run minimal procces
         if(minRunnableTimeProcces->state == RUNNABLE){
           if(ticks-pauseSystemTicksStartTime > (pauseSystemSleepSecondsInput*10)){
               acquire(&minRunnableTimeProcces->lock);
@@ -529,8 +537,6 @@ firstComeFirstServed(void){
               // before jumping back to us.
               minRunnableTimeProcces->state = RUNNING;
               c->proc = minRunnableTimeProcces;
-              // printf("current running procces:%d  minRunnableTime: %d  ticks:%d\n"
-              // ,minRunnableTimeProcces->pid,minRunnableTimeProcces->last_runnable_time,ticks);
               swtch(&c->context, &minRunnableTimeProcces->context);
               c->proc = 0;
               release(&minRunnableTimeProcces->lock);
@@ -539,6 +545,54 @@ firstComeFirstServed(void){
   }
 }
 
+void
+ApproximateSJF(void){
+
+  struct proc *p;
+  struct cpu *c = mycpu();
+  //initiazlied as init proccess
+  struct proc *minMeanTicksProcces =&proc[0];
+  uint minMeanTicks = MAX_INT;
+  uint proccessStartRunningTime;
+  uint proccessCurrentMeanTicks;
+  for(;;){
+    
+    minMeanTicks=MAX_INT;
+    // Avoid deadlock by ensuring that devices can interrupt.
+    intr_on();
+    //detecting the procces with the minRunnableTime
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if((p->mean_ticks) < minMeanTicks)
+            {
+              minMeanTicksProcces = p;
+              minMeanTicks= p->mean_ticks;
+             }
+        }
+        release(&p->lock);
+      } 
+        //run minimal procces
+        if(minMeanTicksProcces->state == RUNNABLE){
+          if(ticks-pauseSystemTicksStartTime > (pauseSystemSleepSecondsInput*10)){
+              acquire(&minMeanTicksProcces->lock);
+              // Switch to chosen process.  It is the process's job
+              // to release its lock and then reacquire it
+              // before jumping back to us.
+              minMeanTicksProcces->state = RUNNING;
+              c->proc = minMeanTicksProcces;
+              proccessStartRunningTime=ticks;
+              swtch(&c->context, &minMeanTicksProcces->context);
+              minMeanTicksProcces->last_ticks = ticks-proccessStartRunningTime;
+              proccessCurrentMeanTicks=(((10-rate)* minMeanTicksProcces->mean_ticks +
+              (minMeanTicksProcces->last_ticks * rate))/10);
+              minMeanTicksProcces->mean_ticks = proccessCurrentMeanTicks;
+              c->proc = 0;
+              release(&minMeanTicksProcces->lock);
+          }
+    }
+  }
+}
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores

@@ -106,4 +106,6 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   uint last_runnable_time;     //last time the procces changed to
+  uint mean_ticks;            //SJF Policy
+  uint last_ticks;            //SJF Policy
 };
