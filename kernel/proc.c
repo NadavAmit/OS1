@@ -24,6 +24,17 @@ extern char trampoline[]; // trampoline.S
 int pauseSystemTicksStartTime = 0;
 int pauseSystemSleepSecondsInput = 0;
 
+#define MAX_INT 2147483647;
+
+#ifdef SJF
+int policy = 1;
+#endif
+#ifdef FCFS
+int policy=2;
+#endif
+#ifdef DEFAULT
+int policy = 0; 
+#endif
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
 // memory model when using p->parent.
@@ -247,7 +258,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
+  p->last_runnable_time = ticks;
   release(&p->lock);
 }
 
@@ -317,6 +328,7 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->last_runnable_time=ticks;
   release(&np->lock);
 
   return pid;
@@ -441,6 +453,18 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
+  switch(policy){
+  case 0:
+    roundRobin();
+    break;
+  case 2:
+    firstComeFirstServed();
+    break;
+  }
+}
+void
+roundRobin(void){
+
   struct proc *p;
   struct cpu *c = mycpu();
 
@@ -470,6 +494,51 @@ scheduler(void)
     }
   }
 }
+
+void
+firstComeFirstServed(void){
+
+  struct proc *p;
+  struct cpu *c = mycpu();
+  //initiazlied as init proccess
+  struct proc *minRunnableTimeProcces =&proc[0];
+  uint minRunnableTime = MAX_INT;
+  for(;;){
+    
+    minRunnableTime=MAX_INT;
+    // Avoid deadlock by ensuring that devices can interrupt.
+    intr_on();
+    //detecting the procces with the minRunnableTime
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if((p->last_runnable_time) < minRunnableTime)
+            {
+              minRunnableTimeProcces = p;
+              minRunnableTime= p->last_runnable_time;
+             }
+        }
+        release(&p->lock);
+      } 
+    //run minimal procces
+        if(minRunnableTimeProcces->state == RUNNABLE){
+          if(ticks-pauseSystemTicksStartTime > (pauseSystemSleepSecondsInput*10)){
+              acquire(&minRunnableTimeProcces->lock);
+              // Switch to chosen process.  It is the process's job
+              // to release its lock and then reacquire it
+              // before jumping back to us.
+              minRunnableTimeProcces->state = RUNNING;
+              c->proc = minRunnableTimeProcces;
+              // printf("current running procces:%d  minRunnableTime: %d  ticks:%d\n"
+              // ,minRunnableTimeProcces->pid,minRunnableTimeProcces->last_runnable_time,ticks);
+              swtch(&c->context, &minRunnableTimeProcces->context);
+              c->proc = 0;
+              release(&minRunnableTimeProcces->lock);
+          }
+    }
+  }
+}
+
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
@@ -505,6 +574,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  p->last_runnable_time=ticks;
   sched();
   release(&p->lock);
 }
@@ -573,6 +643,7 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        p->last_runnable_time=ticks;
       }
       release(&p->lock);
     }
@@ -594,6 +665,7 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        p->last_runnable_time=ticks;
       }
       release(&p->lock);
       return 0;
@@ -605,8 +677,11 @@ kill(int pid)
 
 int kill_system(){
 
-  struct proc *p;
+  
 
+  struct proc *p;
+  
+  
   int shellId = 2;
   int initId = 1 ;
   for(p = proc; p < &proc[NPROC]; p++){
