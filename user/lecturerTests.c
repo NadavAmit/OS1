@@ -34,11 +34,25 @@ void kill_system_dem(int interval, int loop_size) {
     printf("\n");
 }
 
+void print_stats_dem() {
+    //  int pid = getpid();
+    // for (int i = 0; i < loop_size; i++) {
+    //     if (i % interval == 0 && pid == getpid()) {
+    //         printf("kill system %d/%d completed.\n", i, loop_size);
+    //     }
+    //     if (i == loop_size / 2) {
+    //         print_stats();
+    //     }
+    // }
+    // printf("\n");
+    print_stats();
+}
 
 int
 main(int argc, char *argv[])
 {
-    pause_system_dem(10, 10, 100);
+    pause_system_dem(10, 2, 100);
     kill_system_dem(10, 100);
+    print_stats_dem();
     exit(0);
 }

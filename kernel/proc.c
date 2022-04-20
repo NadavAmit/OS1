@@ -41,6 +41,20 @@ int policy=2;
 #ifdef DEFAULT
 int policy = 0; 
 #endif
+
+// part 4
+uint sleeping_processes_mean;
+uint runnable_processes_mean;
+uint running_processes_mean;
+
+int processes_counter = 0;
+
+uint program_time;
+uint start_time;
+uint cpu_utilization;
+
+
+
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
 // memory model when using p->parent.
@@ -68,6 +82,14 @@ void
 procinit(void)
 {
   struct proc *p;
+
+    //initialze to 0 - part 4
+    sleeping_processes_mean = 0;
+    runnable_processes_mean = 0;
+    running_processes_mean = 0;
+    program_time = 0;
+    start_time = ticks;
+    cpu_utilization = 0;
 
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
@@ -263,7 +285,10 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  //starts counting from first procces initialization
   p->state = RUNNABLE;
+  p->start_counting_ticks = ticks;
+
   p->last_runnable_time = ticks;
   release(&p->lock);
 }
@@ -333,7 +358,11 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
+  np->sleeping_time = 0;   
+  np->running_time = 0;
+  np->runnable_time = 0;
   np->state = RUNNABLE;
+  np->start_counting_ticks = ticks;
   np->last_runnable_time=ticks;
   release(&np->lock);
 
@@ -391,10 +420,32 @@ exit(int status)
   acquire(&p->lock);
 
   p->xstate = status;
+  //records and accumelates the time of the running time
+  p->end_counting_ticks = (ticks - p->start_counting_ticks);
+  p->running_time += p->end_counting_ticks;
+
+  //changing to zombie state doesn't need to count anymore 
   p->state = ZOMBIE;
 
+  //updating global means values - part 4
+  running_processes_mean= ( (processes_counter * running_processes_mean) +
+  p->running_time) / (processes_counter +1);
+  runnable_processes_mean= ( (processes_counter * runnable_processes_mean) +
+  p->runnable_time) / (processes_counter +1);
+  sleeping_processes_mean= ( (processes_counter * sleeping_processes_mean) +
+  p->sleeping_time) / (processes_counter +1);
+  // adding procces to all procceses that ran
+  processes_counter += 1;
+
+  //updating program running time
+  program_time += p->running_time;
+  
+  //updating program running time
+  cpu_utilization = (program_time / (ticks-start_time));
+  
   release(&wait_lock);
 
+  
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
@@ -489,7 +540,15 @@ roundRobin(void){
           // Switch to chosen process.  It is the process's job
           // to release its lock and then reacquire it
           // before jumping back to us.
-          p->state = RUNNING;
+          
+          //records and accumelates the time of the runnable time
+          p->end_counting_ticks = (ticks - p->start_counting_ticks);
+          p->runnable_time += p->end_counting_ticks;
+
+          //changing to running state and starts counting time
+          p->state = RUNNING; 
+          p->start_counting_ticks = ticks;
+          
           c->proc = p;
           swtch(&c->context, &p->context);
 
@@ -535,7 +594,16 @@ firstComeFirstServed(void){
               // Switch to chosen process.  It is the process's job
               // to release its lock and then reacquire it
               // before jumping back to us.
+
+              //records and accumelates the time of the runnable time
+              minRunnableTimeProcces->end_counting_ticks = (ticks - minRunnableTimeProcces->start_counting_ticks);
+              minRunnableTimeProcces->runnable_time += minRunnableTimeProcces->end_counting_ticks;
+
+              //changing to running state and starts counting time
               minRunnableTimeProcces->state = RUNNING;
+              minRunnableTimeProcces->start_counting_ticks = ticks;
+
+
               c->proc = minRunnableTimeProcces;
               swtch(&c->context, &minRunnableTimeProcces->context);
               c->proc = 0;
@@ -579,14 +647,25 @@ ApproximateSJF(void){
               // Switch to chosen process.  It is the process's job
               // to release its lock and then reacquire it
               // before jumping back to us.
+
+              //records and accumelates the time of the runnable time
+              minMeanTicksProcces->end_counting_ticks = (ticks - minMeanTicksProcces->start_counting_ticks);
+              minMeanTicksProcces->runnable_time += minMeanTicksProcces->end_counting_ticks;
+
+              //changing to running state and starts counting time
               minMeanTicksProcces->state = RUNNING;
+              minMeanTicksProcces->start_counting_ticks = ticks;
+              
               c->proc = minMeanTicksProcces;
               proccessStartRunningTime=ticks;
               swtch(&c->context, &minMeanTicksProcces->context);
+
+              //Update SJF meanticks
               minMeanTicksProcces->last_ticks = ticks-proccessStartRunningTime;
               proccessCurrentMeanTicks=(((10-rate)* minMeanTicksProcces->mean_ticks +
               (minMeanTicksProcces->last_ticks * rate))/10);
               minMeanTicksProcces->mean_ticks = proccessCurrentMeanTicks;
+             
               c->proc = 0;
               release(&minMeanTicksProcces->lock);
           }
@@ -627,7 +706,15 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
+
+  //records and accumelates the time of the running time
+  p->end_counting_ticks = (ticks - p->start_counting_ticks);
+  p->running_time += p->end_counting_ticks;
+
+  //changing to runnable state and starts counting time
   p->state = RUNNABLE;
+  p->start_counting_ticks = ticks;
+
   p->last_runnable_time=ticks;
   sched();
   release(&p->lock);
@@ -673,8 +760,14 @@ sleep(void *chan, struct spinlock *lk)
 
   // Go to sleep.
   p->chan = chan;
-  p->state = SLEEPING;
 
+  //records and accumelates the time of the running time
+  p->end_counting_ticks = (ticks - p->start_counting_ticks);
+  p->running_time += p->end_counting_ticks;
+
+  //changing to sleeping state and starts counting time  
+  p->state = SLEEPING;
+  p->start_counting_ticks = ticks;
   sched();
 
   // Tidy up.
@@ -696,8 +789,16 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
-        p->state = RUNNABLE;
-        p->last_runnable_time=ticks;
+      
+      //records and accumelates the time of the running time
+      p->end_counting_ticks = (ticks - p->start_counting_ticks);
+      p->sleeping_time += p->end_counting_ticks;
+
+      //changing to runnable state and starts counting time
+      p->state = RUNNABLE;
+      p->start_counting_ticks = ticks;
+
+      p->last_runnable_time=ticks;
       }
       release(&p->lock);
     }
@@ -718,7 +819,14 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
+
+        //records and accumelates the time of the sleeping time
+        p->end_counting_ticks = (ticks - p->start_counting_ticks);
+        p->sleeping_time += p->end_counting_ticks;
+
+        //changing to runnable state and starts counting time
         p->state = RUNNABLE;
+        p->start_counting_ticks = ticks;
         p->last_runnable_time=ticks;
       }
       release(&p->lock);
@@ -756,6 +864,12 @@ int pause_system(int seconds){
   return 0;
 
 
+}
+
+//printStats
+int print_stats(){
+  printf("Program Time: %d \t CPU Util: %d \n",program_time,cpu_utilization);
+  return 0;
 }
 
 // Copy to either a user address, or kernel address,

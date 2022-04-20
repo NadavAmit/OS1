@@ -99,6 +99,11 @@ sys_pause_system(void)
   return pause_system(seconds);
 }
 
+uint64
+sys_print_stats(){
+  return print_stats();
+}
+
 
 // return how many clock tick interrupts have occurred
 // since start.

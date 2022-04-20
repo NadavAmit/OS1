@@ -108,4 +108,9 @@ struct proc {
   uint last_runnable_time;     //last time the procces changed to
   uint mean_ticks;            //SJF Policy
   uint last_ticks;            //SJF Policy
+  uint sleeping_time;         //proccess total sleeping time
+  uint runnable_time;         //proccess total runnable time   
+  uint running_time;          //proccess total running time
+  uint start_counting_ticks; //records the start time of current state of the proccess
+  uint end_counting_ticks;   //records the finish time of current state of the procces
 };

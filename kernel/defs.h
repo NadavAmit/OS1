@@ -109,6 +109,7 @@ int             pause_system(int);
 void            roundRobin(void);
 void            firstComeFirstServed(void);
 void            ApproximateSJF(void);
+int             print_stats(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
