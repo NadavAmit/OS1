@@ -358,6 +358,8 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
+  np->mean_ticks=0;
+  np->last_ticks=0;
   np->sleeping_time = 0;   
   np->running_time = 0;
   np->runnable_time = 0;
@@ -441,7 +443,7 @@ exit(int status)
   program_time += p->running_time;
   
   //updating program running time
-  cpu_utilization = (program_time / (ticks-start_time));
+  cpu_utilization = ((100 * program_time) / (ticks-start_time));
   
   release(&wait_lock);
 
@@ -865,10 +867,16 @@ int pause_system(int seconds){
 
 
 }
-
 //printStats
 int print_stats(){
-  printf("Program Time: %d \t CPU Util: %d \n",program_time,cpu_utilization);
+  printf("-----------------------------------------\n");
+  printf("Number of processes so far: %d\n",processes_counter);
+  printf("Program Time: %d \n",program_time);
+  printf("CPU Util: %d \n",cpu_utilization);
+  printf("Runnable Processes Mean: %d \n",runnable_processes_mean);
+  printf("Running Processes Mean: %d \n",running_processes_mean);
+  printf("Sleeping Processes Mean: %d \n",sleeping_processes_mean);
+  printf("-----------------------------------------\n");
   return 0;
 }
 
